@@ -30,6 +30,13 @@
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
+//Get available commands and place in an alphabetic linked list (set)
+cmdlink* getcmds();
+//Find specific command in that linked set
+cmdlink* findcmd(char*);
+//Execute a command
+int runcmd(cmdlink *);
+
 
 /* When non-zero, this global means the user is done using this program. */
 int done = 0;
