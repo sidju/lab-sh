@@ -30,6 +30,7 @@
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
+
 //Get available commands and place in an alphabetic linked list (set)
 cmdlink* getcmds();
 //Find specific command in that linked set
