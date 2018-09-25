@@ -37,7 +37,7 @@ int done = 0;
 /*
  * Name: main
  *
- * Description: Gets the ball rolling...
+ * Description: Initialises
  *
  */
 int main(void)
@@ -47,29 +47,30 @@ int main(void)
 
   while (!done) {
 
+    //Declare a char pointer and get the command from the user
     char *line;
-    line = readline("> ");
+    line = readline("# "); //Returns upon newline
 
+    //If empty: go back and scan again.
     if (!line) {
       /* Encountered EOF at top level */
       done = 1;
     }
+    //If not: clean the input and check that it isn't empty.
     else {
-      /*
-       * Remove leading and trailing whitespace from the line
-       * Then, if there is anything left, add it to the history list
-       * and execute it.
-       */
+      //Remove leading and trailing whitespace from the line
       stripwhite(line);
-
+      //If not empty: add to history and execute.
       if(*line) {
         add_history(line);
-        /* execute it */
+	//Execute
         n = parse(line, &cmd);
+	//Print debug information.
         PrintCommand(n, &cmd);
       }
     }
-    
+
+    //At each new loop/line, clean the input.
     if(line) {
       free(line);
     }
