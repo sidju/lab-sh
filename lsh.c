@@ -2,7 +2,7 @@
  * Main source code file for lsh shell program
  *
  * You are free to add functions to this file.
- * If you want to add functions in a separate file 
+n * If you want to add functions in a separate file 
  * you will need to modify Makefile to compile
  * your additional functions.
  *
@@ -26,17 +26,10 @@
 /*
  * Function declarations
  */
-
+int RunCommand(int, Command *);
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
-
-//Get available commands and place in an alphabetic linked list (set)
-cmdlink* getcmds();
-//Find specific command in that linked set
-cmdlink* findcmd(char*);
-//Execute a command
-int runcmd(cmdlink *);
 
 
 /* When non-zero, this global means the user is done using this program. */
@@ -51,7 +44,7 @@ int done = 0;
 int main(void)
 {
   Command cmd;
-  int n;
+  int ret;
 
   while (!done) {
 
@@ -68,16 +61,32 @@ int main(void)
     else {
       //Remove leading and trailing whitespace from the line
       stripwhite(line);
-      //If not empty: add to history and execute.
       if(*line) {
-        add_history(line);
-	//Execute
-        n = parse(line, &cmd);
-	//Print debug information.
-        PrintCommand(n, &cmd);
+        //Check for special commands 
+	if(line[0] == '#') {
+	  printf("commented\n");
+	}
+	else if(strcmp(line,"exit") == 0) {
+	  done=1;
+	}
+	else if(strcmp(line,"cd") == 0) {
+	  printf("cd\n");
+	}
+	else if(strcmp(line,"pwd") == 0) {
+	  printf("%s\n", getenv("PWD"));
+	}
+	//if normal, execute
+	else {
+	  add_history(line);
+	  //Execute
+	  ret = parse(line, &cmd);
+	  //todo, run command with opts
+	  ret = RunCommand(ret, &cmd);
+	  //Print debug information.
+	  PrintCommand(ret, &cmd);
+	}
       }
     }
-
     //At each new loop/line, clean the input.
     if(line) {
       free(line);
@@ -85,6 +94,35 @@ int main(void)
   }
   return 0;
 }
+
+/*
+ * Name: RunCommand
+ *
+ * Description: Executes the parsed command structure
+ *
+ */
+int
+RunCommand(int ret, Command *cmd)
+{
+  printf("starting execution\n");
+  for(;;){
+    if( cmd->rstdin ){
+      printf("there is an rstdin set\n");
+    }
+    //figure out how to read from specified file
+    if( cmd->rstdout ){
+      printf("there is an rstdout set\n");
+      //if file address starts with / it is global, else appended to $PWD
+    }
+    //figure out how to write to specified file
+    if( cmd->bakground ){
+      printf("it should be run in background\n");
+    }
+    //write the branching
+    return ret;
+  }
+}
+
 
 /*
  * Name: PrintCommand
