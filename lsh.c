@@ -19,6 +19,7 @@ n * If you want to add functions in a separate file
 
 #include <stdio.h>
 #include <stdlib.h>
+//#include <unistd.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "parse.h"
@@ -35,8 +36,11 @@ n * If you want to add functions in a separate file
 /*
  * Function declarations
  */
+// RunCommand will return error if forking fails
+// It could get the last commands exit-code, later
 int RunCommand(Command *);
-int RunPgm(Pgm *);
+// Run Pgm will never return, since it transforms into the executed program
+void RunPgm(Pgm *, int);
 
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
@@ -93,11 +97,20 @@ int main(void)
 	  add_history(line);
 	  //Parse
 	  ret = parse(line, &cmd);
-	  if (ret != 1){ return 1; }
+	  if (ret != 1)
+	    {
+	      puts("parse error\n");
+	      return 1;
+	    }
 	  //execute
 	  ret = RunCommand(&cmd);
-	  if (ret != 0){ return 1; }
-	  //Print debug information.
+	  //negative numbers and 0 is error, since ret = nr of executed commands is 
+	  if (ret < 0 )
+	    {
+	      puts("run error\n");
+	      return 1;
+	    }
+      	  //Print debug information.
 	  PrintCommand(ret, &cmd);
 	}
       }
@@ -120,8 +133,8 @@ int main(void)
 int
 RunCommand(Command *cmd)
 {
-  int cpid;
   int cret;
+  int cpid;
   printf("starting execution\n");
   if( cmd->rstdin ){
     printf("there is an rstdin set\n");
@@ -130,33 +143,35 @@ RunCommand(Command *cmd)
   if( cmd->rstdout ){
     printf("there is an rstdout set\n");
     //if file address starts with / it is global, else appended to $PWD
-    puts("test");
   }
-  //figure out how to write to specified file
-  if( cmd->bakground ){
-    printf("it should be run in background\n");
-  }
-  //write the branching
+  //Fork the program call
   cpid = fork();
-  if (cpid == 0) {
-    //this thread is child
-    //run the program
-    RunPgm(cmd->pgm);
-    //Close the child process
-    exit(0);
-  }
-  else if (cpid > 0) {
-    //this thread is parent
-    //wait for child if background isn't set
-    waitpid(cpid, &cret, 0);
-    //TODO: add meaningful error codes
-    if(cret != 0){ return 1; }
-  }
-  else {
-    //error has occured
-    printf("errno is %d", errno);
-  }
-  return cret;
+  if (cpid == 0)
+    {
+      //is child, carry on
+      RunPgm(cmd->pgm, -1);
+      exit(0);
+    }
+  else if(cpid > 0)
+    {
+      if( !cmd->bakground )
+	{
+	  //Wait for child, return child's return
+	  //This yields the executed commands return code, due to exec
+	  waitpid(cpid, &cret, 0);
+	  return cret;
+	}
+      else
+	{
+	  //Return 0 without waiting for return
+	  return 0;
+	}
+    }
+  else
+    {
+      //fork error
+      return -1;
+    }
 }
 
 
@@ -167,27 +182,73 @@ RunCommand(Command *cmd)
  * (I wish the parser had been readable and thus feasible to modify)
  *
  */
-int
-RunPgm (Pgm *p)
+void
+RunPgm (Pgm *p, int out)
 {
-  int ret;
-  if (p == NULL) {
-    return 0;
-  }
-  else {
-    char **pl = p->pgmlist;
-    /* The list is in reversed order so print
-     * it reversed to get right
-     * (If it wasn't this could easily be done by looping...)
-     */
-    ret = RunPgm(p->next);
-    //if previous command worked, run next
-    if (ret == 0){
-      execvp(*pl, pl);
+  int cpid;
+  int pipes[2];
+  
+  if (p == NULL)
+    {
+      // should be redundant now
+      // I'll delete it later, when sure
+      //     return;
     }
-    return ret;
-  }
+  else
+    {
+      /* The list is in reversed order so print
+       * it reversed to get right
+       * (If it wasn't this could easily be done by looping...)
+       */
+      
+      //if there is a next command, set the pipe correctly and run it
+      if( p->next )
+	{
+	  if(pipe(pipes))
+	    {
+	      //pipe creation failed
+	      puts("pipe error");
+	      return;
+	    }
+	  //After pipe is prepared, fork
+	  cpid = fork();
+	  if( cpid == 0)
+	    {
+	      //is child
+	      close(pipes[0]);
+	      //run the next command
+	      RunPgm(p->next, pipes[1]);
+	      exit(0);
+	    }
+	  else if( cpid <= 0)
+	    {
+	      //is error, cleanup and fail silently
+	      close(pipes[0]);
+	      close(pipes[1]);
+	      return;
+	    }
+	  else
+	    {
+	      //is parent
+	      //change stdin to pipe's output
+	      close(pipes[1]);
+	      dup2(pipes[0], STDIN_FILENO);
+	      //run as usual
+	    }
+	}
+      //if parent and pipe done or no threading
+      //change output to out, if given
+      if (out >= 0)
+	{
+	  dup2(out, STDOUT_FILENO);
+	}
+      //run command
+      execvp(*p->pgmlist, p->pgmlist);
+      puts("Command not found.");
+      exit(0);
+      }
 }
+
 
 
 /*
