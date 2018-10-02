@@ -24,6 +24,7 @@ n * If you want to add functions in a separate file
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "parse.h"
+#include <signal.h>
 // for threading
 #include <sys/types.h>
 #include <unistd.h>
@@ -42,6 +43,7 @@ n * If you want to add functions in a separate file
 int RunCommand(Command *);
 // Run Pgm will never return, since it transforms into the executed program
 void RunPgm(Pgm *, int, int);
+void intHandler(int);
 
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
@@ -50,6 +52,17 @@ void stripwhite(char *);
 
 /* When non-zero, this global means the user is done using this program. */
 int done = 0;
+//PID of first child
+int cpid = -1;
+
+// Kills first foreground child, if alive, instead of self
+void intHandler(int sig)
+{
+  if (cpid > 0)
+    {
+      kill(cpid, SIGKILL);
+    }
+}
 
 /*
  * Name: main
@@ -61,6 +74,10 @@ int main(void)
 {
   Command cmd;
   int ret;
+  char pwd[1024];
+
+  // set signal handling to internal
+  signal(SIGINT, intHandler);
 
   while (!done) {
 
@@ -78,41 +95,52 @@ int main(void)
       //Remove leading and trailing whitespace from the line
       stripwhite(line);
       if(*line) {
-        //Check for special commands 
-	if(line[0] == '#') {
-	  printf("commented\n");
-	}
-	else if(strcmp(line,"exit") == 0) {
-	  done=1;
-	}
-	else if(strcmp(line,"cd") == 0) {
-	  printf("cd\n");
-	}
-	else if(strcmp(line,"pwd") == 0) {
-	  printf("%s\n", getenv("PWD"));
-	}
+        //Check for comments 
+	if(line[0] == '#') {}
 	//if normal, execute
 	else {
-	  
-	  //TODO: add meaningful error codes
 	  add_history(line);
 	  //Parse
 	  ret = parse(line, &cmd);
 	  if (ret != 1)
 	    {
-	      puts("parse error\n");
+	      fprintf(stderr, "Parse error\n");
 	      return 1;
 	    }
-	  //execute
-	  ret = RunCommand(&cmd);
-	  //negative numbers and 0 is error, since ret = nr of executed commands is 
-	  if (ret < 0 )
+
+	  if(strcmp(line,"exit") == 0) {
+	    done=1;
+	  }
+	  else if(strcmp(cmd.pgm->pgmlist[0],"cd") == 0) {
+	    if( cmd.pgm->pgmlist[1] )
+	      {
+		chdir(cmd.pgm->pgmlist[1]);	
+	      }
+	  }
+	  else if(strcmp(line,"pwd") == 0) {
+	    if (getcwd(pwd, sizeof(pwd)) != NULL)
+	      {
+		printf("%s\n", pwd);
+	      }
+	    else
+	      {
+		fprintf(stderr,"Pwd error. Is the path longer than 1024 characters?");
+	      }
+	  }
+	  else
 	    {
-	      puts("run error\n");
-	      return 1;
+	  
+	      //execute
+	      ret = RunCommand(&cmd);
+	      //negative numbers and 0 is error, since ret = nr of executed commands is 
+	      if (ret < 0 )
+		{
+		  fprintf(stderr, "Error running command.");
+		  return 1;
+		}
 	    }
       	  //Print debug information.
-	  PrintCommand(ret, &cmd);
+	  //	  PrintCommand(ret, &cmd);
 	}
       }
     }
@@ -135,41 +163,33 @@ int
 RunCommand(Command *cmd)
 {
   int cret;
-  int cpid;
   int in = -1;
   int out = -1;
   
-  printf("starting execution\n");
-  
   if( cmd->rstdin ){
-    printf("there is an rstdin set\n");
-
     if ((in = open(cmd->rstdin, O_RDONLY)) == -1)
       {
 	fprintf(stderr, "Cannot open input file\n");
-	exit(1);
+	return -1;
       }
   }
   
-  //figure out how to read from specified file
   if( cmd->rstdout ){
-    printf("there is an rstdout set\n");
-
-    // This is where append would go, if the parser read it
-    if ((out = open(cmd->rstdout, O_WRONLY)) == -1)
+    // This is where my append would go, if the parser read it!!!
+    if ((out = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
       {
 	fprintf(stderr, "Cannot open output file\n");
-	exit(1);
+	return -1;
       }
-    //if file address starts with / it is global, else appended to $PWD
   }
+  
   //Fork the program call
   cpid = fork();
   if (cpid == 0)
     {
       //is child, carry on
+      //will never return...
       RunPgm(cmd->pgm, out, in);
-      exit(0);
     }
   else if(cpid > 0)
     {
@@ -182,15 +202,18 @@ RunCommand(Command *cmd)
 	}
       else
 	{
-	  //Return 0 without waiting for return
+	  //forget child and return 0 without waiting for return
+	  cpid = -1;
 	  return 0;
 	}
     }
   else
     {
       //fork error
+      fprintf(stderr, "Fork error in parent.");
       return -1;
     }
+  return -1; // it should never get here
 }
 
 
@@ -204,74 +227,71 @@ RunCommand(Command *cmd)
 void
 RunPgm (Pgm *p, int out, int in)
 {
-  int cpid;
+  int pid;
   int pipes[2];
   
-  if (p == NULL)
-    {
-      // should be redundant now
-      // I'll delete it later, when sure
-      //     return;
-    }
-  else
-    {
-      /* The list is in reversed order so print
-       * it reversed to get right
-       * (If it wasn't this could easily be done by looping...)
-       */
+  /* The list is in reversed order so print
+   * it reversed to get right
+   * (If it wasn't this could easily be done by looping...)
+   */
       
-      //if there is a next command, set the pipe correctly and run it
-      if( p->next )
+  //if there is a next command, set the pipe correctly and run it
+  if( p->next )
+    {
+      if(pipe(pipes))
 	{
-	  if(pipe(pipes))
-	    {
-	      //pipe creation failed
-	      puts("pipe error");
-	      return;
-	    }
-	  //After pipe is prepared, fork
-	  cpid = fork();
-	  if( cpid == 0)
-	    {
-	      //is child
-	      close(pipes[0]);
-	      //run the next command
-	      RunPgm(p->next, pipes[1], in);
-	      exit(0);
-	    }
-	  else if( cpid <= 0)
-	    {
-	      //is error, cleanup and fail silently
-	      close(pipes[0]);
-	      close(pipes[1]);
-	      return;
-	    }
-	  else
-	    {
-	      //is parent
-	      //change stdin to pipe's output
-	      close(pipes[1]);
-	      dup2(pipes[0], STDIN_FILENO);
-	      //run as usual
-	    }
+	  //pipe creation failed
+	  fprintf(stderr, "pipe error in child\n");
+	  exit(0);
+	}
+      //After pipe is prepared, fork
+      pid = fork();
+      if( pid == 0)
+	{
+	  //is child
+	  close(pipes[0]);
+	  //run the next command
+	  RunPgm(p->next, pipes[1], in);
+	  exit(0);
+	}
+      else if( pid <= 0)
+	{
+	  //is error, cleanup and fail silently
+	  close(pipes[0]);
+	  close(pipes[1]);
+	  fprintf(stderr, "forking error in child.");  
+	  exit(0);
 	}
       else
 	{
-	  //if this is the last program in the line the
-	  //in flag must be applied
-	  dup2(in, STDIN_FILENO);
+	  //is parent
+	  //change stdin to pipe's output
+	  close(pipes[1]);
+	  dup2(pipes[0], STDIN_FILENO);
+	  //run as usual
 	}
-      //if parent and pipe done or no threading
-      //change output to out, if given
+    }
+  else
+    {
+      //if this is the last program in the line the
+      //in flag must be applied
       if (out >= 0)
 	{
-	  dup2(out, STDOUT_FILENO);
+	  dup2(in, STDIN_FILENO);
 	}
-      //run command
-      execvp(*p->pgmlist, p->pgmlist);
-      puts("Command not found.");
-      exit(0);
-      }
+    }
+  //if parent and pipe done or no threading
+  //change output to out, if given
+  if (out >= 0)
+    {
+      dup2(out, STDOUT_FILENO);
+    }
+  //run command
+  execvp(*p->pgmlist, p->pgmlist);
+  fprintf(stderr, "Command not found.");
+  exit(0);
+      
+  return;
 }
 
 

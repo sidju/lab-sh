@@ -4,21 +4,22 @@
 			|     DESIGN DOCUMENT        |
 			+----------------------------+
 
----- GROUP ----
-
->> Fill in the names and email addresses of your group members.
+---- GROUP 16 ----
 
 David Olofsson <david.m.o@telia.com>
-FirstName LastName <email@domain.example>
+Rebecca Carlson <rm.carlson@hotmail.com>
 
 ---- PRELIMINARIES ----
 
->> If you have any preliminary comments on your submission, notes for the
->> TAs, or extra credit, please include them here.
+Comments:
+A fairly quick hackjob, since we are under pressure from a group project in
+the parallell course. We hope it fulfills the requirements.
+With any luck, the following ones will be better.
 
->> Please cite any offline or online sources you consulted while
->> preparing your submission, other than the Pintos documentation, course
->> text, lecture notes, and course instructors.
+Additional sources:
+Man-pages for the instructions, as well as a quick google to find some of them
+by function.
+
 
 			   COMMAND SHELL
 			   =============
@@ -29,15 +30,12 @@ These questions will help us to keep track of the difficulty level of
 assignments, as well as keeping track of which team members worked on
 which parts.
 
-David Olofsson: ~ 5h
-Focus: Efficiency, security and correctness, features always taking the back seat.
+David Olofsson: ~ 9h
+Focus: Efficiency and correctness, features always taking the back seat.
 
+Rebecca Carlson: ~ 4h
+Focus: Understanding, comprehension of new concepts, learning.
 
->> L1: How many hours did each team member spend on this assignment?
-   Make sure that each member's total time is listed.
-
->> L2: What did each team member focus on for this assignment?  Keep
-   descriptions to 25-30 words or less.
 
 
 			  SURVEY QUESTIONS
