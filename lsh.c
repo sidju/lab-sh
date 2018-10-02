@@ -79,6 +79,12 @@ int main(void)
   // set signal handling to internal
   signal(SIGINT, intHandler);
 
+  // handle children
+  // initially we didn't handle sigchild and created zombies
+  // we found this fix on stackoverflow after swift googling for handling
+  /* https://stackoverflow.com/questions/7171722/how-can-i-handle-sigchld */
+  signal(SIGCHLD, SIG_IGN);
+  
   while (!done) {
 
     //Declare a char pointer and get the command from the user
@@ -234,7 +240,7 @@ RunPgm (Pgm *p, int out, int in)
    * it reversed to get right
    * (If it wasn't this could easily be done by looping...)
    */
-      
+  
   //if there is a next command, set the pipe correctly and run it
   if( p->next )
     {
