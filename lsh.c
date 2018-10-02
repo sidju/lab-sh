@@ -19,7 +19,8 @@ n * If you want to add functions in a separate file
 
 #include <stdio.h>
 #include <stdlib.h>
-#inclued <sys/stat.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "parse.h"
@@ -40,7 +41,7 @@ n * If you want to add functions in a separate file
 // It could get the last commands exit-code, later
 int RunCommand(Command *);
 // Run Pgm will never return, since it transforms into the executed program
-void RunPgm(Pgm *, int);
+void RunPgm(Pgm *, int, int);
 
 void PrintCommand(int, Command *);
 void PrintPgm(Pgm *);
@@ -92,7 +93,7 @@ int main(void)
 	}
 	//if normal, execute
 	else {
-
+	  
 	  //TODO: add meaningful error codes
 	  add_history(line);
 	  //Parse
@@ -135,14 +136,31 @@ RunCommand(Command *cmd)
 {
   int cret;
   int cpid;
+  int in = -1;
+  int out = -1;
+  
   printf("starting execution\n");
+  
   if( cmd->rstdin ){
     printf("there is an rstdin set\n");
-    
+
+    if ((in = open(cmd->rstdin, O_RDONLY)) == -1)
+      {
+	fprintf(stderr, "Cannot open input file\n");
+	exit(1);
+      }
   }
+  
   //figure out how to read from specified file
   if( cmd->rstdout ){
     printf("there is an rstdout set\n");
+
+    // This is where append would go, if the parser read it
+    if ((out = open(cmd->rstdout, O_WRONLY)) == -1)
+      {
+	fprintf(stderr, "Cannot open output file\n");
+	exit(1);
+      }
     //if file address starts with / it is global, else appended to $PWD
   }
   //Fork the program call
@@ -150,7 +168,7 @@ RunCommand(Command *cmd)
   if (cpid == 0)
     {
       //is child, carry on
-      RunPgm(cmd->pgm, -1);
+      RunPgm(cmd->pgm, out, in);
       exit(0);
     }
   else if(cpid > 0)
@@ -184,7 +202,7 @@ RunCommand(Command *cmd)
  *
  */
 void
-RunPgm (Pgm *p, int out)
+RunPgm (Pgm *p, int out, int in)
 {
   int cpid;
   int pipes[2];
@@ -218,7 +236,7 @@ RunPgm (Pgm *p, int out)
 	      //is child
 	      close(pipes[0]);
 	      //run the next command
-	      RunPgm(p->next, pipes[1]);
+	      RunPgm(p->next, pipes[1], in);
 	      exit(0);
 	    }
 	  else if( cpid <= 0)
@@ -236,6 +254,12 @@ RunPgm (Pgm *p, int out)
 	      dup2(pipes[0], STDIN_FILENO);
 	      //run as usual
 	    }
+	}
+      else
+	{
+	  //if this is the last program in the line the
+	  //in flag must be applied
+	  dup2(in, STDIN_FILENO);
 	}
       //if parent and pipe done or no threading
       //change output to out, if given
