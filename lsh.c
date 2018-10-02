@@ -19,7 +19,7 @@ n * If you want to add functions in a separate file
 
 #include <stdio.h>
 #include <stdlib.h>
-//#include <unistd.h>
+#inclued <sys/stat.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "parse.h"
@@ -138,6 +138,7 @@ RunCommand(Command *cmd)
   printf("starting execution\n");
   if( cmd->rstdin ){
     printf("there is an rstdin set\n");
+    
   }
   //figure out how to read from specified file
   if( cmd->rstdout ){
