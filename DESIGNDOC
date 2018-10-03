@@ -19,6 +19,7 @@ With any luck, the following ones will be better.
 Additional sources:
 Man-pages for the instructions, as well as a quick google to find some of them
 by function.
+A specific post on stackoverflow, referenced where used.
 
 
 			   COMMAND SHELL
@@ -30,10 +31,10 @@ These questions will help us to keep track of the difficulty level of
 assignments, as well as keeping track of which team members worked on
 which parts.
 
-David Olofsson: ~ 9h
+David Olofsson: ~ 10h
 Focus: Efficiency and correctness, features always taking the back seat.
 
-Rebecca Carlson: ~ 4h
+Rebecca Carlson: ~ 5h
 Focus: Understanding, comprehension of new concepts, learning.
 
 
@@ -47,21 +48,20 @@ questions are just to spur your thoughts.  Also, feel free to be completely
 honest if there are issues with the assignment or the course - you won't be
 penalized.  We can't fix things until we know about them.  :-)
 
->> In your opinion, was this assignment, or any of the parts of it, too
->> easy or too hard?  Did it take too long or too little time?
+David:
+I loved the task. It has been very interesting and rewarding to work on it.
+Especially nice was the list of useful functions you wrote up for it, it
+helped a lot.
 
->> Did you find that working on a particular part of the assignment gave
->> you greater insight into some aspect of OS design?
+My one and only gripe is how the parser is frankly unreadable and not always
+fully functional. The example of "wc -l > antalkonton < /etc/passwd" failed
+because the -l flag was incorrectly parsed in some way, quite taking the wind
+out of our sails.
 
->> Were there any parts of the assignment that you felt were unnecessarily
->> tedious or pointless?
+Just put in some comments, some spacing and a clearer coding style (brackets,
+please) and the parser will be way better. And perhaps reversing the direction
+of the pgm linked list, so that it is possible to solve efficiently solve with
+looping, since function calls in c are somewhat expensive (for the stack, mostly).
 
->> Is there some particular fact or hint we should give students in
->> future quarters to help them solve the problems?  Conversely, did you
->> find any of our guidance to be misleading?
-
->> Do you have any suggestions for the instructor and/or TAs to more
->> effectively assist students, either for future quarters or the remaining
->> projects?
-
->> Any other comments?
+PS. I sat down and wrote this right before turning it in, so Rebecca had no
+chance to give her comments.
