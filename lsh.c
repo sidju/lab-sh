@@ -55,14 +55,19 @@ int done = 0;
 //PID of first child
 int cpid = -1;
 
+
+/*
+Found to be unneccesary, as SIGINT is sent to underlying by itself
 // Kills first foreground child, if alive, instead of self
 void intHandler(int sig)
 {
   if (cpid > 0)
     {
+      //fprintf(stderr,"Killing %d.\n", cpid);
       kill(cpid, SIGKILL);
     }
 }
+*/
 
 /*
  * Name: main
@@ -76,13 +81,16 @@ int main(void)
   int ret;
   char pwd[1024];
 
-  // set signal handling to internal
-  signal(SIGINT, intHandler);
+  // Ignore ctrl-c
+  // Not quite the norm for shells, but a functioning solution.
+  signal(SIGINT, SIG_IGN);
 
   // handle children
   // initially we didn't handle sigchild and created zombies
   // we found this fix on stackoverflow after swift googling for handling
   /* https://stackoverflow.com/questions/7171722/how-can-i-handle-sigchld */
+  //By explicitly ignoring SIGCHLD the children don't wait for SIGCHLD to
+  //be recieved, thus never becoming zombies.
   signal(SIGCHLD, SIG_IGN);
   
   while (!done) {
@@ -138,15 +146,15 @@ int main(void)
 	  
 	      //execute
 	      ret = RunCommand(&cmd);
-	      //negative numbers and 0 is error, since ret = nr of executed commands is 
-	      if (ret < 0 )
+	      //all non-zero values are considered error 
+	      if (ret != 0 )
 		{
-		  fprintf(stderr, "Error running command.");
-		  return 1;
+		  fprintf(stderr, "Error running command. %d \n", ret);
+		  //Print debug information.
+		  PrintCommand(ret, &cmd);
+		  return -1;
 		}
 	    }
-      	  //Print debug information.
-	  //	  PrintCommand(ret, &cmd);
 	}
       }
     }
@@ -194,6 +202,11 @@ RunCommand(Command *cmd)
   if (cpid == 0)
     {
       //is child, carry on
+      if( !cmd->bakground )
+	{
+	  //if run in foreground, handle keyboard interrupts
+	  signal(SIGINT, SIG_DFL);
+	}
       //will never return...
       RunPgm(cmd->pgm, out, in);
     }
@@ -202,9 +215,12 @@ RunCommand(Command *cmd)
       if( !cmd->bakground )
 	{
 	  //Wait for child, return child's return
-	  //This yields the executed commands return code, due to exec
 	  waitpid(cpid, &cret, 0);
-	  return cret;
+
+	  //Debug printout
+	  //fprintf(stderr, "%s returned %d\n", *cmd->pgm->pgmlist, WIFEXITED(cret));
+	  
+	  return WIFEXITED(cret);
 	}
       else
 	{
@@ -219,6 +235,7 @@ RunCommand(Command *cmd)
       fprintf(stderr, "Fork error in parent.");
       return -1;
     }
+  fprintf(stderr, "What just happened?!");
   return -1; // it should never get here
 }
 
@@ -234,6 +251,7 @@ void
 RunPgm (Pgm *p, int out, int in)
 {
   int pid;
+  int ret;
   int pipes[2];
   
   /* The list is in reversed order so print
@@ -247,8 +265,8 @@ RunPgm (Pgm *p, int out, int in)
       if(pipe(pipes))
 	{
 	  //pipe creation failed
-	  fprintf(stderr, "pipe error in child\n");
-	  exit(0);
+	  fprintf(stderr, "pipe error at program.\n");
+	  exit(-1);
 	}
       //After pipe is prepared, fork
       pid = fork();
@@ -258,15 +276,15 @@ RunPgm (Pgm *p, int out, int in)
 	  close(pipes[0]);
 	  //run the next command
 	  RunPgm(p->next, pipes[1], in);
-	  exit(0);
+	  exit(0); //not needed, but prevents warning.
 	}
       else if( pid <= 0)
 	{
 	  //is error, cleanup and fail silently
 	  close(pipes[0]);
 	  close(pipes[1]);
-	  fprintf(stderr, "forking error in child.");  
-	  exit(0);
+	  fprintf(stderr, "forking error at program.");  
+	  exit(-1);
 	}
       else
 	{
@@ -274,14 +292,26 @@ RunPgm (Pgm *p, int out, int in)
 	  //change stdin to pipe's output
 	  close(pipes[1]);
 	  dup2(pipes[0], STDIN_FILENO);
-	  //run as usual
+	  //wait for child's return
+	  waitpid(pid, &ret, 00);
+	  
+
+	  //Debug printout
+	  //fprintf(stderr, "%s returned %d\n",*p->pgmlist, WIFEXITED(ret));
+	
+	  //if child failed, exit immediately
+	  if(WIFEXITED(ret))
+	    {
+	      exit(WIFEXITED(ret));
+	    }
+	  //otherwise, run as usual
 	}
     }
   else
     {
       //if this is the last program in the line the
       //in flag must be applied
-      if (out >= 0)
+      if (in >= 0)
 	{
 	  dup2(in, STDIN_FILENO);
 	}
@@ -295,9 +325,13 @@ RunPgm (Pgm *p, int out, int in)
   //run command
   execvp(*p->pgmlist, p->pgmlist);
   fprintf(stderr, "Command not found.");
-  exit(0);
-      
+  exit(-1);
+
+  //not ever used
   return;
+  //since this method is always run by a child and normally will
+  //not return exit() is used as return to waitpid(), to improve
+  //predictability
 }
 
 

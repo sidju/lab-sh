@@ -1,2 +1,0 @@
-catch sigchild, so that children are properly handled upon death.
-
