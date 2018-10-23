@@ -25,23 +25,24 @@ n * If you want to add functions in a separate file
 #include <readline/history.h>
 #include "parse.h"
 #include <signal.h>
-// for threading
+/* for threading */
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/wait.h>
-// for separating command from arguments
+/* for separating command from arguments */
 #include <string.h>
-// for debugging
+/* for debugging */
 #include <errno.h>
 
 
 /*
  * Function declarations
+ *
+ * RunCommand will return error if forking fails
+ * It could get the last commands exit-code, later
  */
-// RunCommand will return error if forking fails
-// It could get the last commands exit-code, later
 int RunCommand(Command *);
-// Run Pgm will never return, since it transforms into the executed program
+/* Run Pgm will never return, since it transforms into the executed program*/
 void RunPgm(Pgm *, int, int);
 void intHandler(int);
 
@@ -52,22 +53,8 @@ void stripwhite(char *);
 
 /* When non-zero, this global means the user is done using this program. */
 int done = 0;
-//PID of first child
+/* PID of first child */
 int cpid = -1;
-
-
-/*
-Found to be unneccesary, as SIGINT is sent to underlying by itself
-// Kills first foreground child, if alive, instead of self
-void intHandler(int sig)
-{
-  if (cpid > 0)
-    {
-      //fprintf(stderr,"Killing %d.\n", cpid);
-      kill(cpid, SIGKILL);
-    }
-}
-*/
 
 /*
  * Name: main
@@ -81,40 +68,42 @@ int main(void)
   int ret;
   char pwd[1024];
 
-  // Ignore ctrl-c
-  // Not quite the norm for shells, but a functioning solution.
+  /* Ignore ctrl-c
+   * Not quite the norm for shells, but a functioning solution.
+   */
   signal(SIGINT, SIG_IGN);
 
-  // handle children
-  // initially we didn't handle sigchild and created zombies
-  // we found this fix on stackoverflow after swift googling for handling
-  /* https://stackoverflow.com/questions/7171722/how-can-i-handle-sigchld */
-  //By explicitly ignoring SIGCHLD the children don't wait for SIGCHLD to
-  //be recieved, thus never becoming zombies.
+  /* handle children
+   * initially we didn't handle sigchild and created zombies
+   * we found this fix on stackoverflow after swift googling for handling
+   * https://stackoverflow.com/questions/7171722/how-can-i-handle-sigchld *
+   * By explicitly ignoring SIGCHLD the children don't wait for SIGCHLD to
+   * be recieved, thus never becoming zombies.
+   */
   signal(SIGCHLD, SIG_IGN);
   
   while (!done) {
 
-    //Declare a char pointer and get the command from the user
+    /*Declare a char pointer and get the command from the user*/
     char *line;
-    line = readline("# "); //Returns upon newline
+    line = readline("# "); /*Returns upon newline*/
 
-    //If empty: go back and scan again.
+    /*If empty: go back and scan again.*/
     if (!line) {
       /* Encountered EOF at top level */
       done = 1;
     }
-    //If not: clean the input and check that it isn't empty.
+    /*If not: clean the input and check that it isn't empty.*/
     else {
-      //Remove leading and trailing whitespace from the line
+      /*Remove leading and trailing whitespace from the line*/
       stripwhite(line);
       if(*line) {
-        //Check for comments 
+        /*Check for comments*/ 
 	if(line[0] == '#') {}
-	//if normal, execute
+	/*if normal, execute*/
 	else {
 	  add_history(line);
-	  //Parse
+	  /*Parse*/
 	  ret = parse(line, &cmd);
 	  if (ret != 1)
 	    {
@@ -144,13 +133,13 @@ int main(void)
 	  else
 	    {
 	  
-	      //execute
+	      /*execute*/
 	      ret = RunCommand(&cmd);
-	      //all non-zero values are considered error 
+	      /*all non-zero values are considered error*/ 
 	      if (ret != 0 )
 		{
 		  fprintf(stderr, "Error running command. %d \n", ret);
-		  //Print debug information.
+		  /*Print debug information.*/
 		  PrintCommand(ret, &cmd);
 		  return -1;
 		}
@@ -158,7 +147,7 @@ int main(void)
 	}
       }
     }
-    //At each new loop/line, clean the input.
+    /*At each new loop/line, clean the input.*/
     if(line) {
       free(line);
     }
@@ -189,7 +178,7 @@ RunCommand(Command *cmd)
   }
   
   if( cmd->rstdout ){
-    // This is where my append would go, if the parser read it!!!
+    /* This is where my append would go, if the parser read it!!! */
     if ((out = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
       {
 	fprintf(stderr, "Cannot open output file\n");
@@ -197,46 +186,48 @@ RunCommand(Command *cmd)
       }
   }
   
-  //Fork the program call
+  /*Fork the program call*/
   cpid = fork();
   if (cpid == 0)
     {
-      //is child, carry on
+      /*is child, carry on*/
       if( !cmd->bakground )
 	{
-	  //if run in foreground, handle keyboard interrupts
+	  /*if run in foreground, handle keyboard interrupts*/
 	  signal(SIGINT, SIG_DFL);
 	}
-      //will never return...
+      /*will never return...*/
       RunPgm(cmd->pgm, out, in);
     }
   else if(cpid > 0)
     {
       if( !cmd->bakground )
 	{
-	  //Wait for child, return child's return
+	  /*Wait for child*/
 	  waitpid(cpid, &cret, 0);
 
-	  //Debug printout
-	  //fprintf(stderr, "%s returned %d\n", *cmd->pgm->pgmlist, WIFEXITED(cret));
+	  /*Debug printout
+	  fprintf(stderr, "%s returned %d\n", *cmd->pgm->pgmlist, WIFEXITED(cret));
+	   */
 	  
-	  return WIFEXITED(cret);
+	  /* return WIFEXITED(cret); */
+	  return 0;
 	}
       else
 	{
-	  //forget child and return 0 without waiting for return
+	  /*forget child and return 0 without waiting for return*/
 	  cpid = -1;
 	  return 0;
 	}
     }
   else
     {
-      //fork error
+      /* fork error */
       fprintf(stderr, "Fork error in parent.");
       return -1;
     }
   fprintf(stderr, "What just happened?!");
-  return -1; // it should never get here
+  return -1; /* it should never get here */
 }
 
 
@@ -259,28 +250,28 @@ RunPgm (Pgm *p, int out, int in)
    * (If it wasn't this could easily be done by looping...)
    */
   
-  //if there is a next command, set the pipe correctly and run it
+  /*if there is a next command, set the pipe correctly and run it*/
   if( p->next )
     {
       if(pipe(pipes))
 	{
-	  //pipe creation failed
+	  /*pipe creation failed*/
 	  fprintf(stderr, "pipe error at program.\n");
 	  exit(-1);
 	}
-      //After pipe is prepared, fork
+      /*After pipe is prepared, fork*/
       pid = fork();
       if( pid == 0)
 	{
-	  //is child
+	  /*is child*/
 	  close(pipes[0]);
-	  //run the next command
+	  /*run the next command*/
 	  RunPgm(p->next, pipes[1], in);
-	  exit(0); //not needed, but prevents warning.
+	  exit(0); /*not needed, but prevents warning.*/
 	}
       else if( pid <= 0)
 	{
-	  //is error, cleanup and fail silently
+	  /*is error, cleanup and fail*/
 	  close(pipes[0]);
 	  close(pipes[1]);
 	  fprintf(stderr, "forking error at program.");  
@@ -288,50 +279,55 @@ RunPgm (Pgm *p, int out, int in)
 	}
       else
 	{
-	  //is parent
-	  //change stdin to pipe's output
+	  /*is parent
+	   *change stdin to pipe's output */
 	  close(pipes[1]);
 	  dup2(pipes[0], STDIN_FILENO);
-	  //wait for child's return
+	  /*wait for child's return*/
 	  waitpid(pid, &ret, 00);
 	  
 
-	  //Debug printout
-	  //fprintf(stderr, "%s returned %d\n",*p->pgmlist, WIFEXITED(ret));
+	  /*Debug printout
+	  fprintf(stderr, "%s returned %d\n",*p->pgmlist, WIFEXITED(ret));
+	   */
 	
-	  //if child failed, exit immediately
+	  /*if child failed, exit immediately*/
 	  if(WIFEXITED(ret))
 	    {
 	      exit(WIFEXITED(ret));
 	    }
-	  //otherwise, run as usual
+	  /*otherwise, run as usual*/
 	}
     }
   else
     {
-      //if this is the last program in the line the
-      //in flag must be applied
+      /*if this is the last program in the line the
+       *in flag must be applied
+       */
       if (in >= 0)
 	{
 	  dup2(in, STDIN_FILENO);
 	}
     }
-  //if parent and pipe done or no threading
-  //change output to out, if given
+  /*if parent and pipe done or no threading
+   *change output to out, if given
+   */
   if (out >= 0)
     {
       dup2(out, STDOUT_FILENO);
     }
-  //run command
+  /*run command
+   */
   execvp(*p->pgmlist, p->pgmlist);
   fprintf(stderr, "Command not found.");
   exit(-1);
 
-  //not ever used
+  /*not ever used*/
   return;
-  //since this method is always run by a child and normally will
-  //not return exit() is used as return to waitpid(), to improve
-  //predictability
+  /*since this method is always run by a child and normally will
+   *not return exit() is used as return to waitpid(), to improve
+   *predictability
+   */
 }
 
 
